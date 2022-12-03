@@ -1,6 +1,5 @@
-import re 
-
 # Implementasi concurrency control protocol - Simple Locking with X-lock only
+import re 
 
 # OperationType menampung seluruh jenis operasi pada schedule
 class OperationType:
@@ -19,12 +18,15 @@ class ItemData:
     
     def lock(self, t):
         self.lockedBy = t
+
+    def data(self):
+        return self.item
     
     def checkLocker(self):
         return self.lockedBy
 
-    def unlock(self):
-        self.lockedBy = None
+    def showData(self):
+        print(f"{self.item} <- {self.lockedBy}")
 
 
 # Operation bertujuan untuk membaca suatu string operasi menjadi class Operation
@@ -38,10 +40,11 @@ class Operation:
         else :
             self.itemData = ItemData(data)
     
-    
     def show(self):
-        print(f"{self.opType}{self.transaction}({self.itemData.item})")
-
+        if self.opType != OperationType.abort and self.opType != OperationType.commit:
+            print(f"{self.opType}{self.transaction}({self.itemData.item})", end="")
+        else:
+            print(f"{self.opType}{self.transaction}", end="")
 
 # membaca file txt
 def readTxt(filename):
@@ -49,80 +52,116 @@ def readTxt(filename):
         lines = f.readlines()
     return lines[0].split(",")
 
-
-def isWaitingLock(queue, transaction):
+def isInQueue(queue, transaction):
     for q in queue:
-        if transaction == q.itemData.lockedBy:
+        if q.transaction == transaction:
             return True
     return False
 
+def isLockedbyOther(locker, item, transaction):
+    for data in locker:
+        if data.data() == item:
+                return True, data.checkLocker() != transaction
+    return False, False
 
-if __name__ == "__main__":
-    # membaca file txt yang berisi schedule
-    file = input("Masukkan nama file (.txt): ")
-    li = readTxt(file + '.txt')
-    s = []      # schedule awal
-    for operation in li:
-        res = re.findall(r'([A-Z])+([1-9][0-9]*)(\(([A-Z]+)\))*', operation)
+def lockItem(locker, item, transaction):
+    flag = False
+    for data in locker:
+        if data.data() == item:
+            data.lock(transaction)
+            flag = True
+            break
+    if not flag:
+        locker.append(ItemData(item))
+        locker[-1].lock(transaction)
+    return locker
+
+def removeLock(locker, transaction):
+    return [data for data in locker if data.checkLocker() != transaction]
+
+def grantLock(data, transaction):
+    return Operation(OperationType.lock, transaction, data)
+
+def grantUnlock(data, transaction):
+    return Operation(OperationType.unlock, transaction, data)
+
+
+def simplelocking(tc):
+    s = []
+    ops = tc.split(",")
+    for op in ops:
+        res = re.findall(r'([A-Z])+([1-9][0-9]*)(\(([A-Z]+)\))*', op)
         s.append(Operation(res[0][0], res[0][1], res[0][3]))
-    
-    schedule = []   # schedule final
-    listOfData = [] # list of data yang digunakan pada schedule
-    queue = []      # queue untuk menentukan transaksi mana yang akan dijalankan apabila terjadi queue
+
+    schedule = []
+    queue = []
+    dataLocker = []
 
     for op in s:
-        # jika operasi merupakan READ atau WRITE
-        if(op.opType == OperationType.read or op.opType == OperationType.write):
-            if op.itemData not in listOfData:
-                listOfData.append(op.itemData)
-
-            # mendapat transaksi yang memegang lock dari data
-            dataIdx = listOfData.index(op.itemData)
-            currentLocker = listOfData[dataIdx].checkLocker()
-
-            # mengecek apakah transaksi pada operasi sedang menunggu lock
-            isWaiting = isWaitingLock(queue, op.transaction)
-
-            if(currentLocker == None and not isWaiting):
-                op.itemData.lock(op.transaction)
-                new_lock = Operation(OperationType.lock, op.transaction, op.itemData.item)
-                schedule.append(new_lock)
-                schedule.append(op)
-                listOfData[dataIdx].lock(op.transaction)            # update lock pada listOfData
-            elif(currentLocker == op.transaction and not isWaiting):
-                schedule.append(op)
-            else:
+        if isInQueue(queue, op.transaction):
+            queue.append(op)
+        elif op.opType != OperationType.commit and op.opType != OperationType.abort:
+            isLocked, lockedByOther = isLockedbyOther(dataLocker, op.itemData.data(), op.transaction)
+            if isLocked and lockedByOther:
                 queue.append(op)
-        
-        # jika operasi merupakan COMMIT
-        elif(op.opType == OperationType.commit):
-            # melakukan unlock pada seluruh data yang sedang digunakan transaksi
-            for data in listOfData:
-                if data.lockedBy == op.transaction:
-                    data.unlock()
-                    new_unlock = Operation(OperationType.unlock, op.transaction, data.item)
-                    schedule.append(new_unlock)
-
-            # eksekusi operasi yang menunggu lock akibat transaksi yang baru saja melakukan commit
-            for q in queue:
-                if q.itemData not in listOfData:
-                    listOfData.append(q.itemData)
-                dataIdx = listOfData.index(q.itemData)
-                currentLocker = listOfData[dataIdx].checkLocker()
-
-                # ingat yg di excel
-                if(currentLocker == None):
-                    q.itemData.lock(q.transaction)
-                    new_lock = Operation(OperationType.lock, q.transaction, q.itemData.item)
-                    schedule.append(new_lock)
-                    schedule.append(q)
-                    queue.remove(q)
-                    # update lock pada listOfData
-                    dataIdx = listOfData.index(q.itemData)
-                    listOfData[dataIdx].lock(q.transaction)
+            else:
+                if not isLocked:
+                    dataLocker = lockItem(dataLocker, op.itemData.item, op.transaction)
+                    #grant lock
+                    schedule.append(grantLock(op.itemData.item, op.transaction))
+                # add operation to schedule
+                schedule.append(op)
+        elif op.opType == OperationType.commit:
+            # add operation to schedule
+            schedule.append(op)
+            # grant unlock for all items
+            for data in dataLocker:
+                if data.checkLocker() == op.transaction:
+                    schedule.append(grantUnlock(data.data(), op.transaction))
+            # unlock data
+            dataLocker = removeLock(dataLocker, op.transaction)
+            # run queue
+            newQueue = []
+            for i in range(len(queue)):
+                if isInQueue(newQueue, queue[i].transaction):
+                    newQueue.append(queue[i])
+                elif queue[i].opType != OperationType.commit:
+                    isLocked, lockedByOther = isLockedbyOther(dataLocker, queue[i].itemData.item, queue[i].transaction)
+                    if isLocked and lockedByOther:
+                        newQueue.append(queue[i])
+                    else:
+                        if not isLocked:
+                            dataLocker = lockItem(dataLocker, queue[i].itemData.item, queue[i].transaction)
+                            #grant lock
+                            schedule.append(grantLock(queue[i].itemData.item, queue[i].transaction))
+                        # add operation to schedule
+                        schedule.append(queue[i])
                 else:
-                    continue
-    
-    for op in schedule:
-        op.show()
-        print(op.itemData.checkLocker())
+                    # add operation to schedule
+                    schedule.append(queue[i])
+                    # grant unlock
+                    for data in dataLocker:
+                        if data.checkLocker() == queue[i].transaction:
+                            schedule.append(grantUnlock(data.data(), queue[i].transaction))
+                    # unlock data
+                    dataLocker = removeLock(dataLocker, queue[i].transaction)
+            queue = newQueue
+
+    if len(queue) > 0:
+        return []
+
+    return schedule
+
+TC1 = "R1(X),W2(X),W3(Y),W2(Y),R1(Y),R1(X),C1,C2,C3"
+TC2 = "R1(X),W2(X),W2(Z),W3(Y),W1(X),C1,C2,C3"
+
+#  main
+if __name__ == "__main__":
+    schedule = simplelocking(TC2)
+    if len(schedule) > 0:
+        for op in range(len(schedule)):
+            schedule[op].show()
+            if op != len(schedule)-1:
+                print(",", end="")
+    else:
+        print("There's a deadlock on schedule")
