@@ -46,12 +46,6 @@ class Operation:
         else:
             print(f"{self.opType}{self.transaction}", end="")
 
-# membaca file txt
-def readTxt(filename):
-    with open(filename, 'r') as f:
-        lines = f.readlines()
-    return lines[0].split(",")
-
 def isInQueue(queue, transaction):
     for q in queue:
         if q.transaction == transaction:
@@ -85,6 +79,19 @@ def grantLock(data, transaction):
 def grantUnlock(data, transaction):
     return Operation(OperationType.unlock, transaction, data)
 
+# def printAll(schedule, queue, locker):
+#     print("================Schedule===============↓")
+#     for s in schedule:
+#         s.show()
+#     print("=======================================")
+#     print("===============Queue===================")
+#     for q in queue:
+#         q.show()
+#     print("=======================================")
+#     print("===============Locker==================")
+#     for l in locker:
+#         l.showData()
+#     print("=======================================↑")
 
 def simplelocking(tc):
     s = []
@@ -100,7 +107,7 @@ def simplelocking(tc):
     for op in s:
         if isInQueue(queue, op.transaction):
             queue.append(op)
-        elif op.opType != OperationType.commit and op.opType != OperationType.abort:
+        elif op.opType != OperationType.commit:
             isLocked, lockedByOther = isLockedbyOther(dataLocker, op.itemData.data(), op.transaction)
             if isLocked and lockedByOther:
                 queue.append(op)
@@ -146,6 +153,7 @@ def simplelocking(tc):
                     # unlock data
                     dataLocker = removeLock(dataLocker, queue[i].transaction)
             queue = newQueue
+        # printAll(schedule, queue, dataLocker)
 
     if len(queue) > 0:
         return []
@@ -154,10 +162,14 @@ def simplelocking(tc):
 
 TC1 = "R1(X),W2(X),W3(Y),W2(Y),R1(Y),R1(X),C1,C2,C3"
 TC2 = "R1(X),W2(X),W2(Z),W3(Y),W1(X),C1,C2,C3"
+TC3 = "R1(A),R2(A),R3(B),R1(B),W3(C),W2(C),R1(C),C1,R2(D),W3(B),C3,W2(D),C2"
+TC4 = "R1(A),R3(B),R1(B),W3(C),W2(C),R1(C),C1,R2(D),W3(B),C3,W2(D),C2"
+TC5 = "R1(X),W2(Y),W2(X),R1(Y),C1,C2"
 
 #  main
 if __name__ == "__main__":
-    schedule = simplelocking(TC2)
+    tc = input("Masukkan TC : ")
+    schedule = simplelocking(tc)
     if len(schedule) > 0:
         for op in range(len(schedule)):
             schedule[op].show()
