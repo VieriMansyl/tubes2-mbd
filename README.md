@@ -36,7 +36,7 @@
 
 ## Petunjuk penggunaan program
 
-### Program <i>simplelocking.py</i>
+### Program simplelocking.py
 1. Masuk ke dalam folder <i>src</i>
 ```
 > cd src
@@ -49,4 +49,22 @@
 ```
 FORMAT : [operasi][transaksi]([item data])
 contoh : W1(A),C2,R2(D)
+```
+
+### Program OCC.py
+1. Masuk ke dalam folder <i>src</i>
+```
+> cd src
+```
+2. jalankan program dengan menggunakan <i>command</i> berikut.
+```
+> py OCC.py
+```
+3. Masukkan transaksi serta <i>schedule</i> yang ingin di-uji coba dengan menggunakan format berikut.
+```
+Format Transaksi : [angka > 0]
+contoh : 1 , 2 , 3
+
+Format schedule  : [operasi][transaksi][item data]
+contoh : W1A, C2, R2D
 ```
