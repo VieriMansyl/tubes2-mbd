@@ -29,9 +29,8 @@ def validation(x, transaction) -> bool:
     for i in transaction:
         if (i.validationTS == None or i.id == x.id):
             continue
-
         if (i.validationTS < x.validationTS):
-            if(i.finishTS < x.startTS):
+            if(x.startTS == None or i.finishTS < x.startTS):
                 pass
             elif((x.startTS < i.finishTS) and (i.finishTS < x.validationTS)):
                 for var in i.writeVar:
@@ -45,36 +44,32 @@ def validation(x, transaction) -> bool:
 
 def OCC(totalTransaction, schedule):
 
-    print("Serial Optimistic Concurrency Control :")
-    print()
+    print("\nSerial Optimistic Concurrency Control :")
 
     transactions = []
     for i in range (totalTransaction):
-        tx = Transaction(i+1, 0,0,0)
+        tx = Transaction(i+1, None,None,None)
         transactions.append(tx)
 
     #Read Phase
     for i in range (len(schedule)):
-        if (schedule[i][0] == "R" or schedule[i][0] == "R"):
-            n = int(schedule[i][1])-1
-
+        n = int(schedule[i][1])-1
+        if (schedule[i][0] == "R"):
+            print("Read", schedule[i][2], "in T", end="")
+            print(schedule[i][1])
+            transactions[n].readVar.append(schedule[i][2])
+        elif (schedule[i][0] == "W"):
+            print("Write", schedule[i][2], "in T", end="")
+            print(schedule[i][1])
+            transactions[n].writeVar.append(schedule[i][2])
             if (transactions[n].startTS == None):
-                time.sleep(0.01)
+                time.sleep(0.1)
                 transactions[n].startTS = time.time()
-            if (schedule[i][0] == "R"):
-                print("Read", schedule[i][2], "in T", end="")
-                print(schedule[i][1])
-                transactions[n].readVar.append(schedule[i][2])
-            else:
-                print("Write", schedule[i][2], "in T", end="")
-                print(schedule[i][1])
-                transactions[n].readVar.append(schedule[i][2])
 
         elif (schedule[i][0] == "C"):
             print("Commit T", end="")
             print(schedule[i][1])
-            n  = int(schedule[i][1]) - 1
-            time.sleep(0.01)
+            time.sleep(0.1)
             transactions[n].validationTS = time.time()
 
             #Validation Phase
@@ -82,7 +77,7 @@ def OCC(totalTransaction, schedule):
 
             # Write Phase
             if (validateResult):
-                time.sleep(0.01)
+                time.sleep(0.1)
                 transactions[n].finishTS = time.time()
                 print("Transaksi T", end="")
                 print(n+1, "Succes")
@@ -96,25 +91,24 @@ def OCC(totalTransaction, schedule):
     
 def main():
     
-    print("Serial Optimistic Concurrency Control")
+    print("====|||Serial Optimistic Concurrency Control|||====")
     print()
     totalTransaction = int(input("Total Transaction : "))
 
-    schedule = []
-    total_schedule = int(input("Total Schedule : "))
 
     print("Format Schedule : R1X, W1X, C1")
-    for i in range (total_schedule) :
-        print("Schedule", (i+1),": ",end="")
-        x = str(input())
-        schedule = x.split(", ")
+    print("Schedule : ",end="")
+    x = str(input())
+    schedule = x.split(", ")
 
     if not(checkFormat(schedule)):
         print("Wrong Format!")
     
-    else:
+    
+    else :
         if (OCC(totalTransaction, schedule)):
             print("Validation Succes")
+
         else :
             print("Validasi Failed")
 
